@@ -1,0 +1,390 @@
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Scanner;
+//import java.util.package;
+
+public class KMeans {
+   public static double totalX = 0;
+   public static double totalY = 0;
+   public static double minDistance=999999999;
+   public static int minIndex = 0;
+   public static double speeed;
+   public static void main(String args[]) throws IOException {
+      Scanner sc = new Scanner(System.in);
+      String filePath = "";
+      System.out.print("Enter the name of the CSV file: ");
+      String fileName = sc.nextLine();
+   	
+      int NumOfPoints = getNumOfPoints(filePath, fileName);// *Open the file just to count the number of Records
+   	
+      int X = 0;
+      int Y = 1;
+      ArrayList<Point> dataPoint = new ArrayList<Point>();
+      storePoints(filePath, fileName, dataPoint, X, Y);// *Open file again to store the Records//done
+      
+   
+      int maxIterations = 100;//done
+        
+      System.out.print("Enter the number of drones to form: ");// *Input number of clusters
+      int clusters = sc.nextInt();
+                                     
+   	// *Calculate initial centroid_
+      double[][] centroid = new double[clusters][2];
+      
+      for(int i=0;i<centroid.length;i++)
+      {
+         int index=(int) (Math.floor((NumOfPoints*1.0/clusters)/2) + i*NumOfPoints/clusters);
+         centroid[i][0] = dataPoint.get(index).getX();
+         centroid[i][1] = dataPoint.get(index).getY();
+      }
+      
+   	// *Create array to save the clusters
+      ArrayList<Integer>[] oldClusters = new ArrayList[clusters];//******** */
+      ArrayList<Integer>[] newClusters = new ArrayList[clusters];//********** */
+      ArrayList<Integer>[] finalCluster = new ArrayList[clusters];//********** */
+      ArrayList<Integer>[] RemoveCluster = new ArrayList[clusters];//********** */
+   
+      for(int i=0; i<clusters; i++){// intilaize 
+         oldClusters[i] = new ArrayList<Integer>();
+         newClusters[i] = new ArrayList<Integer>();
+         finalCluster[i] = new ArrayList<Integer>();
+         RemoveCluster[i] = new ArrayList<Integer>();
+      }
+      
+      distanceFormClusters(oldClusters, centroid, dataPoint);// *Make the initial clusters
+      int iterations = 0;
+   
+   	// *Run---
+      while(true) {
+         updateMeans(oldClusters, centroid, dataPoint);
+         distanceFormClusters(newClusters, centroid, dataPoint);
+      
+         iterations++;
+      
+         if(iterations > maxIterations || clustersEquality(oldClusters, newClusters))
+            break;
+         else
+            resetClusters(oldClusters, newClusters);
+      }
+      
+      for(int i=0;i<centroid.length;i++){
+         Point p1 = new Point(centroid[i][0],centroid[i][1]);
+         dataPoint.add(p1);
+      }    
+      
+      int[] indexC = new int [clusters];
+   
+      for(int x=0;x<centroid.length;x++){
+         for(int s=0;s<dataPoint.size();s++){
+            if(dataPoint.get(s).getX()== centroid[x][0]&& dataPoint.get(s).getY()== centroid[x][1]){
+               oldClusters[x].add(s);   
+               indexC[x]=s;          
+            }
+         }
+      }
+                     
+      System.out.println("inter the speed of drones per secand : ");
+      speeed = sc.nextDouble();
+
+      CopyClusters(RemoveCluster,oldClusters);
+      computeShortPath( RemoveCluster,indexC,finalCluster,dataPoint);
+      
+            System.out.println("index");//print 
+      for(int i=0; i<finalCluster.length;i++){
+         System.out.print("index for cluster"+i+":");
+         System.out.print("-"+finalCluster[i].size()+"- ");
+         for(  int index2: finalCluster[i]) {  
+            System.out.print("["+index2+"] ");
+         }System.out.println();
+      }
+      //computeTime(oldClusters,dataPoint);
+      
+      // *the output
+      System.out.println("\nThe final clusters with shortest path are:");
+      displayOutput(oldClusters, centroid, dataPoint);
+      System.out.println("\nIterations taken = " + iterations);        
+      sc.close();
+   }//End Main
+//___________________________________________________________
+   static void storePoints(String filePath, String fileName, ArrayList<Point> dataPoints, int X, int Y) throws IOException {
+      BufferedReader br = new BufferedReader(new FileReader(filePath + fileName + ".csv"));
+      String line;
+      int i = 0;
+      while ((line = br.readLine()) != null) {
+         String[] values = line.split(",");
+         double x = Double.parseDouble(values[0]);
+         double y = Double.parseDouble(values[1]);
+         Point p = new Point(x,y);
+         dataPoints.add(p);
+         //}
+      }
+      br.close();  
+   }
+//___________________________________________________________
+   static int getNumOfPoints(String filePath, String fileName) throws IOException {
+      int NumOfPoints = 0;
+      BufferedReader br = new BufferedReader(new FileReader(filePath + fileName + ".csv"));
+      while (br.readLine() != null)
+         NumOfPoints++;
+      br.close();
+      return NumOfPoints;
+   }
+//___________________________________________________________
+   static void sortPointsByX(double[][] dataPoints) {
+      double[] temp;
+   	// Bubble Sort
+      for(int i=0; i<dataPoints.length; i++)
+         for(int j=1; j<(dataPoints.length-i); j++)
+            if(dataPoints[j-1][0] > dataPoints[j][0]) {
+               temp = dataPoints[j-1];
+               dataPoints[j-1] = dataPoints[j];
+               dataPoints[j] = temp;
+            }
+   }
+//___________________________________________________________
+   static void updateMeans(ArrayList<Integer>[] clusterList, double[][] centroid, ArrayList<Point> dataPoints) {//done
+      //double totalX = 0;
+      //double totalY = 0;
+      for(int i=0; i<clusterList.length; i++) {
+         totalX = 0;
+         totalY = 0;
+         for(int index: clusterList[i]) { 
+            totalX += dataPoints.get(index).getX();
+            totalY += dataPoints.get(index).getY();
+         }
+         centroid[i][0] = totalX/clusterList[i].size(); 
+         centroid[i][1] = totalY/clusterList[i].size();
+      }
+   }
+//___________________________________________________________
+   static void distanceFormClusters(ArrayList<Integer>[] clusterList,double[][] centroid,ArrayList<Point> dataPoints ) {//Done
+      double distance[] = new double[centroid.length];
+      //double minDistance;
+      //int minIndex = 0;
+      for(int i=0;i<dataPoints.size();i++){
+         minDistance = 999999999; 
+         for(int j=0; j<centroid.length; j++) {
+            distance[j] = Math.sqrt(Math.pow((dataPoints.get(i).getX() - centroid[j][0]), 2) + Math.pow((dataPoints.get(i).getY() - centroid[j][1]), 2));
+            if(distance[j] < minDistance) {
+               minDistance = distance[j];
+               minIndex = j;
+            }
+         }
+         dataPoints.get(i).setCluster(minIndex);
+         clusterList[minIndex].add(i);
+      }
+   }
+//___________________________________________________________
+static void computeShortPath (ArrayList<Integer>[] clusterList,int[] centroid,ArrayList<Integer>[] finalCluster,ArrayList<Point> dataPoints){
+      int z=0;
+      double distance[] = new double[centroid.length+1];
+      for (int x=0;x<centroid.length;x++){
+      finalCluster[x].add(centroid[x]);
+      clusterList[x].remove(clusterList[x].indexOf(centroid[x]));
+      }      
+      try {
+         for(int i=0; i<clusterList.length; i++) {
+          for(; z<=clusterList[i].size(); z++) {
+                           System.out.println("size"+clusterList[i].size());
+                double minDistancee=999999999;
+           for(int index2: clusterList[i]) {  
+                           System.out.println("** "+finalCluster[i].get(finalCluster[i].size()-1));
+            dataPoints.get(index2).setdistence(Math.sqrt(Math.pow((dataPoints.get(index2).getX() - dataPoints.get(finalCluster[i].get(finalCluster[i].size()-1)).getX()), 2) + Math.pow((dataPoints.get(index2).getY() - dataPoints.get(finalCluster[i].get(finalCluster[i].size()-1)).getY()), 2)));
+                           System.out.println(index2);
+                           System.out.println(dataPoints.get(index2).getdistence());
+            if((dataPoints.get(index2).getdistence() < minDistancee )){  
+                           System.out.println("Im in");
+               minDistancee = dataPoints.get(index2).getdistence();
+               minIndex = index2;
+               distance[i]=minIndex;
+               System.out.println("min index"+minIndex);
+            }
+            }
+            
+      finalCluster[i].add(minIndex);
+      //clusterList[i].remove(minIndex);
+      clusterList[i].remove(clusterList[i].indexOf(minIndex));
+            System.out.println("index");//print for check
+      for(int k=0; k<finalCluster.length;k++){
+         System.out.print("index for cluster"+k+":");
+         System.out.print("-"+finalCluster[k].size()+"- ");
+         for(  int index2: finalCluster[k]) {  
+            System.out.print("["+index2+"] ");
+         }System.out.println();
+      }
+         z=0;
+      }
+      }
+      } catch (IndexOutOfBoundsException e) {
+               e.printStackTrace();
+               System.out.println("Invalid indexes or empty string");
+}
+       System.out.println("index");//print for check
+      for(int i=0; i<clusterList.length;i++){
+         System.out.print("index for cluster"+i+":");
+         System.out.print("-"+clusterList[i].size()+"- ");
+         for(  int index2: clusterList[i]) {  
+            System.out.print("["+index2+"] ");
+         }System.out.println();
+      }
+            System.out.println("index");//print for check 
+      for(int i=0; i<finalCluster.length;i++){
+         System.out.print("index for cluster"+i+":");
+         System.out.print("-"+finalCluster[i].size()+"- ");
+         for(  int index2: finalCluster[i]) {  
+            System.out.print("["+index2+"] ");
+         }System.out.println();
+      }      
+}
+//___________________________________________________________
+   static void computeShortDistance(ArrayList<Integer>[] clusterList, int[] newData, ArrayList<Point> dataPoints) {
+      int distance[] = new int[newData.length];
+      double minDistance=999999999;
+      int minIndex = -1;
+      int zzz=0;
+      int j=0;
+      LOOP:for (;j<newData.length;j++){
+         if(newData[j]==-1){
+            if(j>=newData.length){
+               System.exit(0);}
+            distance[j]=-1;
+          
+            continue LOOP;}
+         dataPoints.get(newData[j]).setflag(true);
+         minDistance = Double.MAX_VALUE;
+         for(int index1: clusterList[j]) {
+            if( !(dataPoints.get(index1).getflag())&&(index1!=newData[j])){//here shold change the if 
+               dataPoints.get(index1).setdistence( Math.sqrt(Math.pow(( dataPoints.get(index1).getX()- dataPoints.get(newData[j]).getX()), 2) + Math.pow(( dataPoints.get(index1).getY() - dataPoints.get(newData[j]).getY()), 2)));
+               if((dataPoints.get(index1).getdistence() < minDistance )){                         
+                  minDistance = dataPoints.get(index1).getdistence();
+                  minIndex = index1;
+                  distance[j]=minIndex;
+               }}
+            else{
+               if (minIndex==-1)
+                  distance[j]=-1;
+            }
+                        
+            dataPoints.get(newData[j]).setIndexp(minIndex);
+         }
+         if(minIndex!=-1)
+            dataPoints.get(minIndex).setflag(true);
+            dataPoints.get(newData[j]).setIndexp(minIndex);
+      }
+      ShortestDistance(clusterList,distance,dataPoints);
+   }
+//___________________________________________________________
+   static void ShortestDistance(ArrayList<Integer>[] clusterList, int[] centroid, ArrayList<Point> dataPoints) {         
+      for (int j=0;j<clusterList.length;j++){
+         for(int index1: clusterList[j]) { 
+            if( dataPoints.get(index1).getIndexp()== -1 && !(dataPoints.get(index1).getflag()) )
+            { computeShortDistance(clusterList,centroid,dataPoints);}
+         }
+      }
+   }
+//___________________________________________________________
+   static void sortPath(ArrayList<Integer>[] clusterList, int[] centroid, ArrayList<Point> dataPoints, ArrayList<Integer>[] finalCluster ){
+      for (int x=0;x<centroid.length;x++){
+         finalCluster[x].add(centroid[x]);
+         int c=dataPoints.get(centroid[x]).getIndexp();
+         while(c!=-1){
+            finalCluster[x].add(c);
+            c=dataPoints.get(c).getIndexp();
+         }
+      }}
+//___________________________________________________________
+   static void computeTime(ArrayList<Integer>[] clusterList, ArrayList<Point> dataPoints) {//updat
+      for(int i=0;i<clusterList.length;i++) 
+      {
+         for(int index: clusterList[i]){
+            dataPoints.get(index).setTime((dataPoints.get(index).getdistence()/speeed));
+            //System.out.println("\nThe Time are:"+ dataPoints.get(index).getTime());
+         }
+      }   
+   }
+//___________________________________________________________
+   static boolean clustersEquality(ArrayList<Integer>[] oldClusters, ArrayList<Integer>[] newClusters) {
+   	
+      for(int i=0; i<oldClusters.length; i++) {
+      
+          // Check only lengths first
+         if(oldClusters[i].size() != newClusters[i].size())
+            return false;
+      
+      	// Check individual values if lengths are equal
+         for(int j=0; j<oldClusters[i].size(); j++){
+            if(oldClusters[i].get(j) != newClusters[i].get(j))
+               return false;}
+      }
+      //add centroid to datapoints in indexp  add the index of centroid  
+      return true;
+   }
+//___________________________________________________________
+   static void resetClusters(ArrayList<Integer>[] oldClusters, ArrayList<Integer>[] newClusters) {
+      for(int i=0; i<newClusters.length; i++) {
+      	// Copy newClusters to oldClusters
+         oldClusters[i].clear();
+         for(int index: newClusters[i])
+            oldClusters[i].add(index);
+      
+      	// Clear newClusters
+         newClusters[i].clear();
+      }
+      
+   }
+//___________________________________________________________
+   static void CopyClusters(ArrayList<Integer>[] RemoveClusters,ArrayList<Integer>[] oldClusters) {
+      for(int i=0; i<oldClusters.length; i++) {
+      	// Copy newClusters to oldClusters
+         for(int index: oldClusters[i])
+            RemoveClusters[i].add(index);
+      }
+      
+   }
+//___________________________________________________________
+   static void displayOutput(ArrayList<Integer>[] clusterList, double[][] centroid, ArrayList<Point> dataPoints) {
+      int i=0;
+      int j=0;
+      int x=0;
+      LOOP: for(; j<centroid.length; j++)
+      {
+         if(x==3){
+            try{ // thread to sleep for 1000 milliseconds 
+               Thread.sleep(1000);} 
+            catch (Exception e){ 
+               System.out.println(e);}
+            x=0;
+         }
+         System.out.print("centroid"+i+": (" + centroid[j][0] + "," + centroid[j][1] + ") >> ");
+         for(;i<clusterList.length;) 
+         {
+            System.out.print("[");
+            for(int index: clusterList[i])
+               System.out.print("("+dataPoints.get(index).getX()+","+dataPoints.get(index).getY()+ ")");
+            System.out.print("]\n");
+            i++;
+            x++;
+            continue LOOP;
+         }
+      } //end for of centroid.length
+         
+      /*for (int y=0;y<clusterList.length;y++){
+         int z=y;
+         System.out.println("the is the shortest path from centroid # :"+z);
+         for(  int index2: clusterList[y]) {
+          //System.out.println("the index 2= :"+index2);
+            if(dataPoints.get(index2).getIndexp()==-1)
+               System.out.println("and final point is :"+index2);
+         }
+         for(int index1: clusterList[y]) {
+          //System.out.println("the index 1= :"+index1);
+            if( dataPoints.get(index1).getIndexp()==z){
+               System.out.println(index1);
+               z=index1;}
+         }        
+      } */
+   }//end method
+//___________________________________________________________
+}//end class
